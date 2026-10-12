@@ -64,14 +64,14 @@ namespace OreOverlay
 		private ThingDef[] m_CellDef = null; // Ore or special thing on each cell, null if none
         private Color[] m_ColorMap = null;
 		private bool[] m_CellVisible = null; // Precomputed result for GetCellBool
-		
+
 		// Refresh monitoring, per map
 		private int m_LastRefreshTick = -1;
 		private int m_LastScannerCheckTick = -1;
 		private bool m_ActiveScanner = false;
 		private bool m_Stale = true;
 		private bool m_WasShown = false;
-		
+
 		// Initialiser
         public OreOverlayGrid(Map map) : base(map)
         {
@@ -101,13 +101,13 @@ namespace OreOverlay
 			bool[] IsSpecial = new bool[DefCount];
 			Color[] DefColor = new Color[DefCount];
 
-				foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
-				{
+			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+			{
 				if (thingDef.index >= DefCount)
 					continue;
 
 				if (m_SpecialThings.TryGetValue(thingDef.defName, out Color SpecialColor))
-					{
+				{
 					IsSpecial[thingDef.index] = true;
 					DefColor[thingDef.index] = SpecialColor;
 				}
@@ -119,8 +119,8 @@ namespace OreOverlay
 						DefColor[thingDef.index] = OverrideColor;
 					else
 						DefColor[thingDef.index] = thingDef.uiIconColor;
-					}
 				}
+			}
 
 			m_IsSpecialDef = IsSpecial;
 			m_DefColor = DefColor;
@@ -129,7 +129,7 @@ namespace OreOverlay
 
 		// Mineables we will highlight. Update here to ignore.
 		private static bool IsOreDef(ThingDef thingDef)
-				{
+		{
 			if ((thingDef.mineable == false) || (thingDef.building == null))
 				return false;
 
@@ -153,13 +153,13 @@ namespace OreOverlay
 
 		// Forces a refresh on the next draw, e.g. after the mod settings changed.
 		public void MarkStale()
-					{
+		{
 			m_Stale = true;
 		}
 
 		// Called every frame for the current map. Decides whether the grid needs to be rescanned.
 		private void CheckForRefresh()
-						{
+		{
 			int TicksGame = Find.TickManager.TicksGame;
 
 			// Update because ores were just turned on, or this map was just switched to
@@ -168,7 +168,7 @@ namespace OreOverlay
 				m_WasShown = true;
 				m_Stale = true;
 				m_LastScannerCheckTick = -1;
-						}
+			}
 
 			// Update due to change in active scanner state
 			if ((m_LastScannerCheckTick < 0) || (TicksGame - m_LastScannerCheckTick >= ScannerCheckIntervalTicks))
@@ -180,8 +180,8 @@ namespace OreOverlay
 				{
 					m_ActiveScanner = ActiveScanner;
 					m_Stale = true;
-					}
 				}
+			}
 
 			// Update due to ticks passed
 			if ((m_LastRefreshTick < 0) || (TicksGame - m_LastRefreshTick >= RefreshIntervalTicks))
@@ -226,8 +226,8 @@ namespace OreOverlay
 					{
 						CellDef = Def;
 						CellColor = m_DefColor[Def.index];
-			}
-		}
+					}
+				}
 
 				bool Visible = (CellDef != null) && ((ShowSpecial == true) || (CellIsSpecial == false)) && ((ActiveScanner == true) || (Fog.IsFogged(i) == false));
 
@@ -238,7 +238,7 @@ namespace OreOverlay
 				this.m_CellDef[i] = CellDef;
 				this.m_ColorMap[i] = CellColor;
 				this.m_CellVisible[i] = Visible;
-		}
+			}
 
 			if (Changed == true)
 				m_Drawer.SetDirty();
@@ -345,17 +345,17 @@ namespace OreOverlay
                 if (!MapCell.InBounds(this.m_Map))
 					return;
 
-                    int index = m_Map.cellIndices.CellToIndex(MapCell);
+				int index = m_Map.cellIndices.CellToIndex(MapCell);
 				ThingDef CellDef = m_CellDef[index];
 
-                            // Hide if steam
+				// Hide if steam
 				if ((CellDef == null) || IsSpecial(CellDef))
 					return;
 
 				if ((m_ActiveScanner == false) && (MapCell.Fogged(this.m_Map) == true))
 					return;
 
-                                RenderCliffDeposit(CellDef);
+				RenderCliffDeposit(CellDef);
             }
         }
 
