@@ -65,7 +65,7 @@ namespace OreOverlay
 
 					if (Overlay != null)
 					{
-						Overlay.RefreshOreOverlayData(true); // Settings changed, force a refresh.
+						Overlay.MarkStale(); // Settings changed, force a refresh.
 					}
 				}
 			}
