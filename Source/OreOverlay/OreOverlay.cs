@@ -80,7 +80,7 @@ namespace OreOverlay
 
             this.m_Drawer = new CellBoolDrawer((ICellBoolGiver)this, map.Size.x, map.Size.z, 3640, 0.33f);
 
-			PrepareDefLookup();
+			PrepareDefLookup(); // Normally already done on startup
 
 			// Create the map. It is filled in on the first draw with the overlay shown.
 			int NumCells = map.cellIndices.NumGridCells;
@@ -91,7 +91,7 @@ namespace OreOverlay
 
 		#region Ore data refresh
 		// This function prepares the lookup tables used to determine what is highlighted and in which colour. Update here to support new ores.
-		private static void PrepareDefLookup()
+		public static void PrepareDefLookup()
 		{
 			if (m_IsOreDef != null)
 				return;
@@ -169,8 +169,9 @@ namespace OreOverlay
 					return Brighten(Resource.stuffProps.color);
 
 				// Last resort: the average colour of the resource icon, e.g. VGE's gravlite panels and spacer components.
+				// This needs the graphics device, so it only works on the main thread.
 				Source = "resource icon";
-				if (TryGetAverageIconColor(Resource, out Color IconColor))
+				if (UnityData.IsInMainThread && TryGetAverageIconColor(Resource, out Color IconColor))
 					return Brighten(IconColor);
 			}
 
