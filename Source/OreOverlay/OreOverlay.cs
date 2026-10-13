@@ -114,17 +114,129 @@ namespace OreOverlay
 				else if (IsOreDef(thingDef))
 				{
 					IsOre[thingDef.index] = true;
+				}
+			}
 
-					if (m_ColorOverrides.TryGetValue(thingDef.defName, out Color OverrideColor))
-						DefColor[thingDef.index] = OverrideColor;
-					else
-						DefColor[thingDef.index] = thingDef.uiIconColor;
+			// Ores in the override table give their colour to every other ore that drops the same resource,
+			// e.g. VGE compressed steel and twisted steel get the vanilla steel colour.
+			Dictionary<ThingDef, Color> ResourceColors = new Dictionary<ThingDef, Color>();
+			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+			{
+				ThingDef Resource = thingDef.building?.mineableThing;
+				if ((Resource != null) && m_ColorOverrides.TryGetValue(thingDef.defName, out Color OverrideColor))
+					ResourceColors[Resource] = OverrideColor;
+			}
+
+			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+			{
+				if ((thingDef.index < DefCount) && IsOre[thingDef.index])
+				{
+					DefColor[thingDef.index] = FindOreColor(thingDef, ResourceColors, out string Source);
+
+					if (Prefs.DevMode && !m_ColorOverrides.ContainsKey(thingDef.defName))
+						Log.Message("[Ore Overlay] " + thingDef.defName + ": colour " + DefColor[thingDef.index].ToString() + " from " + Source);
 				}
 			}
 
 			m_IsSpecialDef = IsSpecial;
 			m_DefColor = DefColor;
 			m_IsOreDef = IsOre;
+		}
+
+		// Picks the overlay colour for an ore that isn't in the override table, from the def data of the rock or its resource.
+		private static Color FindOreColor(ThingDef thingDef, Dictionary<ThingDef, Color> ResourceColors, out string Source)
+		{
+			Source = "override";
+			if (m_ColorOverrides.TryGetValue(thingDef.defName, out Color OverrideColor))
+				return OverrideColor;
+
+			ThingDef Resource = thingDef.building?.mineableThing;
+
+			Source = "resource override";
+			if ((Resource != null) && ResourceColors.TryGetValue(Resource, out Color ResourceColor))
+				return ResourceColor;
+
+			// Resource rocks draw their flecks in colorTwo, e.g. Jewelry's gems and Odyssey's obsidian.
+			Source = "rock colorTwo";
+			Color FleckColor = thingDef.graphicData?.colorTwo ?? Color.white;
+			if (FleckColor != Color.white)
+				return Brighten(FleckColor);
+
+			if (Resource != null)
+			{
+				Source = "resource stuff colour";
+				if ((Resource.stuffProps != null) && (Resource.stuffProps.color.a > 0f))
+					return Brighten(Resource.stuffProps.color);
+
+				// Last resort: the average colour of the resource icon, e.g. VGE's gravlite panels and spacer components.
+				Source = "resource icon";
+				if (TryGetAverageIconColor(Resource, out Color IconColor))
+					return Brighten(IconColor);
+			}
+
+			Source = "uiIconColor";
+			return thingDef.uiIconColor;
+		}
+
+		// The def colours are meant for textures and look dull on the overlay. Lift coloured ones to the brightness of the
+		// override table, but leave greys alone so dark ores like obsidian stay dark.
+		private static Color Brighten(Color color)
+		{
+			Color.RGBToHSV(color, out float H, out float S, out float V);
+			if (S < 0.15f)
+				return new Color(color.r, color.g, color.b, 1f);
+
+			return Color.HSVToRGB(H, S, Mathf.Max(V, 0.75f));
+		}
+
+		// Textures are not readable, so draw the icon scaled down into a render texture and read that back.
+		private static bool TryGetAverageIconColor(ThingDef def, out Color Average)
+		{
+			Average = Color.white;
+
+			Texture2D Icon = def.uiIcon;
+			if ((Icon == null) || (Icon == BaseContent.BadTex))
+				return false;
+
+			const int Size = 16;
+			RenderTexture Previous = RenderTexture.active;
+			RenderTexture Target = RenderTexture.GetTemporary(Size, Size, 0, RenderTextureFormat.ARGB32);
+			Texture2D Readback = new Texture2D(Size, Size, TextureFormat.ARGB32, false);
+
+			try
+			{
+				Graphics.Blit(Icon, Target);
+				RenderTexture.active = Target;
+				Readback.ReadPixels(new Rect(0, 0, Size, Size), 0, 0);
+				Readback.Apply();
+
+				// Weight by alpha so the transparent background doesn't count
+				float R = 0f, G = 0f, B = 0f, A = 0f;
+				foreach (Color Pixel in Readback.GetPixels())
+				{
+					R += Pixel.r * Pixel.a;
+					G += Pixel.g * Pixel.a;
+					B += Pixel.b * Pixel.a;
+					A += Pixel.a;
+				}
+
+				if (A <= 0f)
+					return false;
+
+				Color Tint = def.graphicData?.color ?? Color.white;
+				Average = new Color(R / A * Tint.r, G / A * Tint.g, B / A * Tint.b, 1f);
+				return true;
+			}
+			catch (Exception)
+			{
+				return false;
+			}
+			finally
+			{
+				RenderTexture.active = Previous;
+				RenderTexture.ReleaseTemporary(Target);
+				UnityEngine.Object.Destroy(Readback);
+			}
 		}
 
 		// Mineables we will highlight. Update here to ignore.
