@@ -66,8 +66,9 @@ namespace OreOverlay
 		private const int ScannerCheckIntervalTicks = 60;
 
 		// Lookup tables indexed by ThingDef.index, built once from the def database.
-		private static bool[] m_IsOreDef = null;
-		private static bool[] m_IsSpecialDef = null;
+		// The def itself is stored and compared, because a mod that removes defs can leave two defs with the same index.
+		private static ThingDef[] m_OreDefAt = null;
+		private static ThingDef[] m_SpecialDefAt = null;
 		private static Color[] m_DefColor = null;
 
 		private Map m_Map;
@@ -106,13 +107,17 @@ namespace OreOverlay
 		// This function prepares the lookup tables used to determine what is highlighted and in which colour. Update here to support new ores.
 		public static void PrepareDefLookup()
 		{
-			if (m_IsOreDef != null)
+			if (m_OreDefAt != null)
 				return;
 
-			int DefCount = DefDatabase<ThingDef>.DefCount;
-			bool[] IsOre = new bool[DefCount];
-			bool[] IsSpecial = new bool[DefCount];
+			int DefCount = 0;
+			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+				DefCount = Math.Max(DefCount, thingDef.index + 1);
+
+			ThingDef[] OreDefAt = new ThingDef[DefCount];
+			ThingDef[] SpecialDefAt = new ThingDef[DefCount];
 			Color[] DefColor = new Color[DefCount];
+			List<ThingDef> OreDefs = new List<ThingDef>();
 
 			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
 			{
@@ -121,12 +126,23 @@ namespace OreOverlay
 
 				if (m_SpecialThings.TryGetValue(thingDef.defName, out Color SpecialColor))
 				{
-					IsSpecial[thingDef.index] = true;
+					SpecialDefAt[thingDef.index] = thingDef;
 					DefColor[thingDef.index] = SpecialColor;
 				}
 				else if (IsOreDef(thingDef))
 				{
-					IsOre[thingDef.index] = true;
+					OreDefAt[thingDef.index] = thingDef;
+					OreDefs.Add(thingDef);
+				}
+			}
+
+			if (Prefs.DevMode)
+			{
+				foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+				{
+					ThingDef Ore = OreDefAt[thingDef.index];
+					if ((Ore != null) && (Ore != thingDef))
+						Log.Warning("[Ore Overlay] " + thingDef.defName + " has the same def index (" + thingDef.index + ") as the ore " + Ore.defName + ", probably because a mod removed defs without reindexing.");
 				}
 			}
 
@@ -148,11 +164,8 @@ namespace OreOverlay
 			}
 
 			int[] OwnSource = new int[DefCount];
-			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+			foreach (ThingDef thingDef in OreDefs)
 			{
-				if ((thingDef.index >= DefCount) || !IsOre[thingDef.index])
-					continue;
-
 				DefColor[thingDef.index] = FindOwnColor(thingDef, out OwnSource[thingDef.index]);
 
 				ThingDef Resource = thingDef.building.mineableThing;
@@ -164,11 +177,8 @@ namespace OreOverlay
 				}
 			}
 
-			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+			foreach (ThingDef thingDef in OreDefs)
 			{
-				if ((thingDef.index >= DefCount) || !IsOre[thingDef.index])
-					continue;
-
 				ThingDef Resource = thingDef.building.mineableThing;
 				string Source = SourceNames[OwnSource[thingDef.index]];
 				if (ResourceSource[Resource] < OwnSource[thingDef.index])
@@ -181,9 +191,9 @@ namespace OreOverlay
 					Log.Message("[Ore Overlay] " + thingDef.defName + ": colour " + DefColor[thingDef.index].ToString() + " from " + Source);
 			}
 
-			m_IsSpecialDef = IsSpecial;
+			m_SpecialDefAt = SpecialDefAt;
 			m_DefColor = DefColor;
-			m_IsOreDef = IsOre;
+			m_OreDefAt = OreDefAt;
 		}
 
 		// Picks the overlay colour of an ore from the override table or the def data of the rock or its resource.
@@ -317,9 +327,9 @@ namespace OreOverlay
 			return true;
 		}
 
-		private static bool IsOre(ThingDef def) => (def.index < m_IsOreDef.Length) && m_IsOreDef[def.index];
+		private static bool IsOre(ThingDef def) => (def.index < m_OreDefAt.Length) && (m_OreDefAt[def.index] == def);
 
-		private static bool IsSpecial(ThingDef def) => (def.index < m_IsSpecialDef.Length) && m_IsSpecialDef[def.index];
+		private static bool IsSpecial(ThingDef def) => (def.index < m_SpecialDefAt.Length) && (m_SpecialDefAt[def.index] == def);
 
 		// Forces a refresh on the next draw, e.g. after the mod settings changed.
 		public void MarkStale()
