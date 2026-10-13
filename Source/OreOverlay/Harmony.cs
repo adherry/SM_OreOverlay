@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using RimWorld;
+using RimWorld.Planet;
 using System;
 using UnityEngine;
 using Verse;
@@ -58,8 +59,12 @@ namespace OreOverlay
 	{
 		[HarmonyPostfix]
 		[HarmonyPatch("MapInterfaceUpdate")]
-		private static void Postfix(DeepResourceGrid __instance)
+		private static void Postfix()
 		{
+			// Same check as MapInterfaceUpdate itself: no map exists (e.g. gravship in flight), or the world map is shown.
+			if ((Find.CurrentMap == null) || (WorldRendererUtility.DrawingMap == false))
+				return;
+
 			OreOverlayGrid Overlay = Find.CurrentMap.GetComponent<OreOverlayGrid>();
 
 			if (Overlay != null)
