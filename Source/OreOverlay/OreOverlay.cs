@@ -19,29 +19,35 @@ namespace OreOverlay
         private static readonly Color m_SteamVent = CreateColor(41, 68, 194);
         private static readonly Color m_HexDeposit = CreateColor(96, 194, 82);
 
+		// Colours for ores whose own def data gives a poor or ambiguous colour. Everything else is discovered in FindOwnColor.
 		private static readonly Dictionary<string, Color> m_ColorOverrides = new Dictionary<string, Color>()
 		{
-			{ "MineableSteel",      CreateColor(214, 141, 91) },
-			{ "MineableSilver",      CreateColor(186, 179, 157) },
-			{ "MineableGold",      CreateColor(209, 166, 17) },
-			{ "MineableUranium",      CreateColor(164, 189, 173) },
-			{ "MineablePlasteel",      CreateColor(160, 206, 214) },
-			{ "MineableJade",      CreateColor(25, 190, 0) },
-			{ "MineableComponentsIndustrial",      CreateColor(194, 120, 24) },
+			{ "MineableSteel",      CreateColor(214, 141, 91) }, // Discovered beige, too close to silver
+			{ "MineableUranium",      CreateColor(164, 189, 173) }, // Discovered dark grey, same as obsidian
+			{ "MineableComponentsIndustrial",      CreateColor(194, 120, 24) }, // Discovered from the stuff colour, too close to gold
+			// Coloured jade from a mod that isn't available for checking what discovery gives
 			{ "MineableBlueJade",      CreateColor(44,96,165) },
 			{ "MineableRedJade",      CreateColor(185,35,31) },
 			{ "MineableWhiteJade",      CreateColor(255,255,255) },
 			{ "MineableBlackJade",      CreateColor(32,32,32) },
 			{ "MineableYellowJade",      CreateColor(230,194,44) },
-			{ "VPE_EltexOre",      CreateColor(181,230,224) },
 		};
 
-		// Colours by mined resource, for resources no ore in the table above drops. Every ore that drops one of these gets its colour.
+		// Colours by mined resource, for resources whose def data gives no usable colour (the icon average comes out grey).
 		private static readonly Dictionary<string, Color> m_ResourceColorOverrides = new Dictionary<string, Color>()
 		{
 			{ "ComponentSpacer",      CreateColor(230,214,90) },
 			{ "GravlitePanel",      CreateColor(150,120,230) },
 		};
+
+		// How good a colour source is, best first. Ores take the best colour found for their resource.
+		private const int SourceOverride = 0;
+		private const int SourceFleckColor = 1;
+		private const int SourceRockColor = 2;
+		private const int SourceStuffColor = 3;
+		private const int SourceIcon = 4;
+		private const int SourceNone = 5;
+		private static readonly string[] SourceNames = { "override", "rock colorTwo", "rock colour", "resource stuff colour", "resource icon", "uiIconColor" };
 
 		// Geysers and ponds. These win over ores on the same cell and can be hidden with the "show steam" option.
 		private static readonly Dictionary<string, Color> m_SpecialThings = new Dictionary<string, Color>()
@@ -124,32 +130,55 @@ namespace OreOverlay
 				}
 			}
 
-			// Ores in the override table give their colour to every other ore that drops the same resource,
-			// e.g. VGE compressed steel and twisted steel get the vanilla steel colour.
-			Dictionary<ThingDef, Color> ResourceColors = new Dictionary<ThingDef, Color>();
+			// Every ore gets the best colour found for its resource, so the same resource has the same colour everywhere,
+			// e.g. VGE compressed steel and twisted steel get the vanilla steel colour and VEE jadeite the vanilla jade colour.
+			Dictionary<ThingDef, Color> ResourceColor = new Dictionary<ThingDef, Color>();
+			Dictionary<ThingDef, int> ResourceSource = new Dictionary<ThingDef, int>();
+			Dictionary<ThingDef, string> ResourceOrigin = new Dictionary<ThingDef, string>();
+
 			foreach (KeyValuePair<string, Color> Entry in m_ResourceColorOverrides)
 			{
 				ThingDef Resource = DefDatabase<ThingDef>.GetNamedSilentFail(Entry.Key);
-				if (Resource != null)
-					ResourceColors[Resource] = Entry.Value;
+				if (Resource == null)
+					continue;
+
+				ResourceColor[Resource] = Entry.Value;
+				ResourceSource[Resource] = SourceOverride;
+				ResourceOrigin[Resource] = "resource override";
 			}
 
+			int[] OwnSource = new int[DefCount];
 			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
 			{
-				ThingDef Resource = thingDef.building?.mineableThing;
-				if ((Resource != null) && m_ColorOverrides.TryGetValue(thingDef.defName, out Color OverrideColor))
-					ResourceColors[Resource] = OverrideColor;
-			}
+				if ((thingDef.index >= DefCount) || !IsOre[thingDef.index])
+					continue;
 
-			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
-			{
-				if ((thingDef.index < DefCount) && IsOre[thingDef.index])
+				DefColor[thingDef.index] = FindOwnColor(thingDef, out OwnSource[thingDef.index]);
+
+				ThingDef Resource = thingDef.building.mineableThing;
+				if (!ResourceSource.TryGetValue(Resource, out int BestSource) || (OwnSource[thingDef.index] < BestSource))
 				{
-					DefColor[thingDef.index] = FindOreColor(thingDef, ResourceColors, out string Source);
-
-					if (Prefs.DevMode && !m_ColorOverrides.ContainsKey(thingDef.defName))
-						Log.Message("[Ore Overlay] " + thingDef.defName + ": colour " + DefColor[thingDef.index].ToString() + " from " + Source);
+					ResourceColor[Resource] = DefColor[thingDef.index];
+					ResourceSource[Resource] = OwnSource[thingDef.index];
+					ResourceOrigin[Resource] = thingDef.defName;
 				}
+			}
+
+			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+			{
+				if ((thingDef.index >= DefCount) || !IsOre[thingDef.index])
+					continue;
+
+				ThingDef Resource = thingDef.building.mineableThing;
+				string Source = SourceNames[OwnSource[thingDef.index]];
+				if (ResourceSource[Resource] < OwnSource[thingDef.index])
+				{
+					DefColor[thingDef.index] = ResourceColor[Resource];
+					Source = "same resource as " + ResourceOrigin[Resource];
+				}
+
+				if (Prefs.DevMode && !m_ColorOverrides.ContainsKey(thingDef.defName))
+					Log.Message("[Ore Overlay] " + thingDef.defName + ": colour " + DefColor[thingDef.index].ToString() + " from " + Source);
 			}
 
 			m_IsSpecialDef = IsSpecial;
@@ -157,50 +186,55 @@ namespace OreOverlay
 			m_IsOreDef = IsOre;
 		}
 
-		// Picks the overlay colour for an ore that isn't in the override table, from the def data of the rock or its resource.
-		private static Color FindOreColor(ThingDef thingDef, Dictionary<ThingDef, Color> ResourceColors, out string Source)
+		// Picks the overlay colour of an ore from the override table or the def data of the rock or its resource.
+		private static Color FindOwnColor(ThingDef thingDef, out int Source)
 		{
-			Source = "override";
+			Source = SourceOverride;
 			if (m_ColorOverrides.TryGetValue(thingDef.defName, out Color OverrideColor))
 				return OverrideColor;
 
-			ThingDef Resource = thingDef.building?.mineableThing;
-
-			Source = "resource override";
-			if ((Resource != null) && ResourceColors.TryGetValue(Resource, out Color ResourceColor))
-				return ResourceColor;
-
-			// Resource rocks draw their flecks in colorTwo, e.g. Jewelry's gems and Odyssey's obsidian.
-			Source = "rock colorTwo";
+			// Resource rocks draw their flecks in colorTwo, e.g. vanilla ores, Jewelry's gems and Odyssey's obsidian.
+			Source = SourceFleckColor;
 			Color FleckColor = thingDef.graphicData?.colorTwo ?? Color.white;
 			if (FleckColor != Color.white)
 				return Brighten(FleckColor);
 
-			if (Resource != null)
-			{
-				Source = "resource stuff colour";
-				if ((Resource.stuffProps != null) && (Resource.stuffProps.color.a > 0f))
-					return Brighten(Resource.stuffProps.color);
+			// Some ores tint the whole rock instead, e.g. VPE's eltex. Grey is just the stone colour.
+			Source = SourceRockColor;
+			Color RockColor = thingDef.graphicData?.color ?? Color.white;
+			if ((RockColor != Color.white) && !IsGrey(RockColor))
+				return Brighten(RockColor);
 
-				// Last resort: the average colour of the resource icon, e.g. VGE's gravlite panels and spacer components.
-				// This needs the graphics device, so it only works on the main thread.
-				Source = "resource icon";
-				if (UnityData.IsInMainThread && TryGetAverageIconColor(Resource, out Color IconColor))
-					return Brighten(IconColor);
-			}
+			ThingDef Resource = thingDef.building.mineableThing;
 
-			Source = "uiIconColor";
+			Source = SourceStuffColor;
+			if ((Resource.stuffProps != null) && (Resource.stuffProps.color.a > 0f))
+				return Brighten(Resource.stuffProps.color);
+
+			// Last resort: the average colour of the resource icon.
+			// This needs the graphics device, so it only works on the main thread.
+			Source = SourceIcon;
+			if (UnityData.IsInMainThread && TryGetAverageIconColor(Resource, out Color IconColor))
+				return Brighten(IconColor);
+
+			Source = SourceNone;
 			return thingDef.uiIconColor;
+		}
+
+		private static bool IsGrey(Color color)
+		{
+			Color.RGBToHSV(color, out float H, out float S, out float V);
+			return S < 0.15f;
 		}
 
 		// The def colours are meant for textures and look dull on the overlay. Lift coloured ones to the brightness of the
 		// override table, but leave greys alone so dark ores like obsidian stay dark.
 		private static Color Brighten(Color color)
 		{
-			Color.RGBToHSV(color, out float H, out float S, out float V);
-			if (S < 0.15f)
+			if (IsGrey(color))
 				return new Color(color.r, color.g, color.b, 1f);
 
+			Color.RGBToHSV(color, out float H, out float S, out float V);
 			return Color.HSVToRGB(H, S, Mathf.Max(V, 0.75f));
 		}
 
