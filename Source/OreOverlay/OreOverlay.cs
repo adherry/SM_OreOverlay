@@ -19,22 +19,35 @@ namespace OreOverlay
         private static readonly Color m_SteamVent = CreateColor(41, 68, 194);
         private static readonly Color m_HexDeposit = CreateColor(96, 194, 82);
 
+		// Colours for ores whose own def data gives a poor or ambiguous colour. Everything else is discovered in FindOwnColor.
 		private static readonly Dictionary<string, Color> m_ColorOverrides = new Dictionary<string, Color>()
 		{
-			{ "MineableSteel",      CreateColor(214, 141, 91) },
-			{ "MineableSilver",      CreateColor(186, 179, 157) },
-			{ "MineableGold",      CreateColor(209, 166, 17) },
-			{ "MineableUranium",      CreateColor(164, 189, 173) },
-			{ "MineablePlasteel",      CreateColor(160, 206, 214) },
-			{ "MineableJade",      CreateColor(25, 190, 0) },
-			{ "MineableComponentsIndustrial",      CreateColor(194, 120, 24) },
+			{ "MineableSteel",      CreateColor(214, 141, 91) }, // Discovered beige, too close to silver
+			{ "MineableUranium",      CreateColor(164, 189, 173) }, // Discovered dark grey, same as obsidian
+			{ "MineableComponentsIndustrial",      CreateColor(194, 120, 24) }, // Discovered from the stuff colour, too close to gold
+			// Coloured jade from a mod that isn't available for checking what discovery gives
 			{ "MineableBlueJade",      CreateColor(44,96,165) },
 			{ "MineableRedJade",      CreateColor(185,35,31) },
 			{ "MineableWhiteJade",      CreateColor(255,255,255) },
 			{ "MineableBlackJade",      CreateColor(32,32,32) },
 			{ "MineableYellowJade",      CreateColor(230,194,44) },
-			{ "VPE_EltexOre",      CreateColor(181,230,224) },
 		};
+
+		// Colours by mined resource, for resources whose def data gives no usable colour (the icon average comes out grey).
+		private static readonly Dictionary<string, Color> m_ResourceColorOverrides = new Dictionary<string, Color>()
+		{
+			{ "ComponentSpacer",      CreateColor(230,214,90) },
+			{ "GravlitePanel",      CreateColor(150,120,230) },
+		};
+
+		// How good a colour source is, best first. Ores take the best colour found for their resource.
+		private const int SourceOverride = 0;
+		private const int SourceFleckColor = 1;
+		private const int SourceRockColor = 2;
+		private const int SourceStuffColor = 3;
+		private const int SourceIcon = 4;
+		private const int SourceNone = 5;
+		private static readonly string[] SourceNames = { "override", "rock colorTwo", "rock colour", "resource stuff colour", "resource icon", "uiIconColor" };
 
 		// Geysers and ponds. These win over ores on the same cell and can be hidden with the "show steam" option.
 		private static readonly Dictionary<string, Color> m_SpecialThings = new Dictionary<string, Color>()
@@ -53,8 +66,9 @@ namespace OreOverlay
 		private const int ScannerCheckIntervalTicks = 60;
 
 		// Lookup tables indexed by ThingDef.index, built once from the def database.
-		private static bool[] m_IsOreDef = null;
-		private static bool[] m_IsSpecialDef = null;
+		// The def itself is stored and compared, because a mod that removes defs can leave two defs with the same index.
+		private static ThingDef[] m_OreDefAt = null;
+		private static ThingDef[] m_SpecialDefAt = null;
 		private static Color[] m_DefColor = null;
 
 		private Map m_Map;
@@ -80,7 +94,7 @@ namespace OreOverlay
 
             this.m_Drawer = new CellBoolDrawer((ICellBoolGiver)this, map.Size.x, map.Size.z, 3640, 0.33f);
 
-			PrepareDefLookup();
+			PrepareDefLookup(); // Normally already done on startup
 
 			// Create the map. It is filled in on the first draw with the overlay shown.
 			int NumCells = map.cellIndices.NumGridCells;
@@ -91,15 +105,19 @@ namespace OreOverlay
 
 		#region Ore data refresh
 		// This function prepares the lookup tables used to determine what is highlighted and in which colour. Update here to support new ores.
-		private static void PrepareDefLookup()
+		public static void PrepareDefLookup()
 		{
-			if (m_IsOreDef != null)
+			if (m_OreDefAt != null)
 				return;
 
-			int DefCount = DefDatabase<ThingDef>.DefCount;
-			bool[] IsOre = new bool[DefCount];
-			bool[] IsSpecial = new bool[DefCount];
+			int DefCount = 0;
+			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+				DefCount = Math.Max(DefCount, thingDef.index + 1);
+
+			ThingDef[] OreDefAt = new ThingDef[DefCount];
+			ThingDef[] SpecialDefAt = new ThingDef[DefCount];
 			Color[] DefColor = new Color[DefCount];
+			List<ThingDef> OreDefs = new List<ThingDef>();
 
 			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
 			{
@@ -108,23 +126,176 @@ namespace OreOverlay
 
 				if (m_SpecialThings.TryGetValue(thingDef.defName, out Color SpecialColor))
 				{
-					IsSpecial[thingDef.index] = true;
+					SpecialDefAt[thingDef.index] = thingDef;
 					DefColor[thingDef.index] = SpecialColor;
 				}
 				else if (IsOreDef(thingDef))
 				{
-					IsOre[thingDef.index] = true;
-
-					if (m_ColorOverrides.TryGetValue(thingDef.defName, out Color OverrideColor))
-						DefColor[thingDef.index] = OverrideColor;
-					else
-						DefColor[thingDef.index] = thingDef.uiIconColor;
+					OreDefAt[thingDef.index] = thingDef;
+					OreDefs.Add(thingDef);
 				}
 			}
 
-			m_IsSpecialDef = IsSpecial;
+			if (Prefs.DevMode)
+			{
+				foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
+				{
+					ThingDef Ore = OreDefAt[thingDef.index];
+					if ((Ore != null) && (Ore != thingDef))
+						Log.Warning("[Ore Overlay] " + thingDef.defName + " has the same def index (" + thingDef.index + ") as the ore " + Ore.defName + ", probably because a mod removed defs without reindexing.");
+				}
+			}
+
+			// Every ore gets the best colour found for its resource, so the same resource has the same colour everywhere,
+			// e.g. VGE compressed steel and twisted steel get the vanilla steel colour and VEE jadeite the vanilla jade colour.
+			Dictionary<ThingDef, Color> ResourceColor = new Dictionary<ThingDef, Color>();
+			Dictionary<ThingDef, int> ResourceSource = new Dictionary<ThingDef, int>();
+			Dictionary<ThingDef, string> ResourceOrigin = new Dictionary<ThingDef, string>();
+
+			foreach (KeyValuePair<string, Color> Entry in m_ResourceColorOverrides)
+			{
+				ThingDef Resource = DefDatabase<ThingDef>.GetNamedSilentFail(Entry.Key);
+				if (Resource == null)
+					continue;
+
+				ResourceColor[Resource] = Entry.Value;
+				ResourceSource[Resource] = SourceOverride;
+				ResourceOrigin[Resource] = "resource override";
+			}
+
+			int[] OwnSource = new int[DefCount];
+			foreach (ThingDef thingDef in OreDefs)
+			{
+				DefColor[thingDef.index] = FindOwnColor(thingDef, out OwnSource[thingDef.index]);
+
+				ThingDef Resource = thingDef.building.mineableThing;
+				if (!ResourceSource.TryGetValue(Resource, out int BestSource) || (OwnSource[thingDef.index] < BestSource))
+				{
+					ResourceColor[Resource] = DefColor[thingDef.index];
+					ResourceSource[Resource] = OwnSource[thingDef.index];
+					ResourceOrigin[Resource] = thingDef.defName;
+				}
+			}
+
+			foreach (ThingDef thingDef in OreDefs)
+			{
+				ThingDef Resource = thingDef.building.mineableThing;
+				string Source = SourceNames[OwnSource[thingDef.index]];
+				if (ResourceSource[Resource] < OwnSource[thingDef.index])
+				{
+					DefColor[thingDef.index] = ResourceColor[Resource];
+					Source = "same resource as " + ResourceOrigin[Resource];
+				}
+
+				if (Prefs.DevMode && !m_ColorOverrides.ContainsKey(thingDef.defName))
+					Log.Message("[Ore Overlay] " + thingDef.defName + ": colour " + DefColor[thingDef.index].ToString() + " from " + Source);
+			}
+
+			m_SpecialDefAt = SpecialDefAt;
 			m_DefColor = DefColor;
-			m_IsOreDef = IsOre;
+			m_OreDefAt = OreDefAt;
+		}
+
+		// Picks the overlay colour of an ore from the override table or the def data of the rock or its resource.
+		private static Color FindOwnColor(ThingDef thingDef, out int Source)
+		{
+			Source = SourceOverride;
+			if (m_ColorOverrides.TryGetValue(thingDef.defName, out Color OverrideColor))
+				return OverrideColor;
+
+			// Resource rocks draw their flecks in colorTwo, e.g. vanilla ores, Jewelry's gems and Odyssey's obsidian.
+			Source = SourceFleckColor;
+			Color FleckColor = thingDef.graphicData?.colorTwo ?? Color.white;
+			if (FleckColor != Color.white)
+				return Brighten(FleckColor);
+
+			// Some ores tint the whole rock instead, e.g. VPE's eltex. Grey is just the stone colour.
+			Source = SourceRockColor;
+			Color RockColor = thingDef.graphicData?.color ?? Color.white;
+			if ((RockColor != Color.white) && !IsGrey(RockColor))
+				return Brighten(RockColor);
+
+			ThingDef Resource = thingDef.building.mineableThing;
+
+			Source = SourceStuffColor;
+			if ((Resource.stuffProps != null) && (Resource.stuffProps.color.a > 0f))
+				return Brighten(Resource.stuffProps.color);
+
+			// Last resort: the average colour of the resource icon.
+			// This needs the graphics device, so it only works on the main thread.
+			Source = SourceIcon;
+			if (UnityData.IsInMainThread && TryGetAverageIconColor(Resource, out Color IconColor))
+				return Brighten(IconColor);
+
+			Source = SourceNone;
+			return thingDef.uiIconColor;
+		}
+
+		private static bool IsGrey(Color color)
+		{
+			Color.RGBToHSV(color, out float H, out float S, out float V);
+			return S < 0.15f;
+		}
+
+		// The def colours are meant for textures and look dull on the overlay. Lift coloured ones to the brightness of the
+		// override table, but leave greys alone so dark ores like obsidian stay dark.
+		private static Color Brighten(Color color)
+		{
+			if (IsGrey(color))
+				return new Color(color.r, color.g, color.b, 1f);
+
+			Color.RGBToHSV(color, out float H, out float S, out float V);
+			return Color.HSVToRGB(H, S, Mathf.Max(V, 0.75f));
+		}
+
+		// Textures are not readable, so draw the icon scaled down into a render texture and read that back.
+		private static bool TryGetAverageIconColor(ThingDef def, out Color Average)
+		{
+			Average = Color.white;
+
+			Texture2D Icon = def.uiIcon;
+			if ((Icon == null) || (Icon == BaseContent.BadTex))
+				return false;
+
+			const int Size = 16;
+			RenderTexture Previous = RenderTexture.active;
+			RenderTexture Target = RenderTexture.GetTemporary(Size, Size, 0, RenderTextureFormat.ARGB32);
+			Texture2D Readback = new Texture2D(Size, Size, TextureFormat.ARGB32, false);
+
+			try
+			{
+				Graphics.Blit(Icon, Target);
+				RenderTexture.active = Target;
+				Readback.ReadPixels(new Rect(0, 0, Size, Size), 0, 0);
+				Readback.Apply();
+
+				// Weight by alpha so the transparent background doesn't count
+				float R = 0f, G = 0f, B = 0f, A = 0f;
+				foreach (Color Pixel in Readback.GetPixels())
+				{
+					R += Pixel.r * Pixel.a;
+					G += Pixel.g * Pixel.a;
+					B += Pixel.b * Pixel.a;
+					A += Pixel.a;
+				}
+
+				if (A <= 0f)
+					return false;
+
+				Color Tint = def.graphicData?.color ?? Color.white;
+				Average = new Color(R / A * Tint.r, G / A * Tint.g, B / A * Tint.b, 1f);
+				return true;
+			}
+			catch (Exception)
+			{
+				return false;
+			}
+			finally
+			{
+				RenderTexture.active = Previous;
+				RenderTexture.ReleaseTemporary(Target);
+				UnityEngine.Object.Destroy(Readback);
+			}
 		}
 
 		// Mineables we will highlight. Update here to ignore.
@@ -138,7 +309,16 @@ namespace OreOverlay
 			if ((thingDef.building.isNaturalRock == true) && (thingDef.building.isResourceRock == false))
 				return false;
 
-			if (thingDef.IsSmoothed)
+			if (thingDef.IsSmoothed || thingDef.IsBlueprint || thingDef.IsFrame)
+				return false;
+
+			// Ores drop something when mined. This skips boulders, VGE's sealant goop and VEE's deep snow.
+			ThingDef Resource = thingDef.building.mineableThing;
+			if (Resource == null)
+				return false;
+
+			// Walls that drop rock chunks are terrain, not ore, e.g. the ice and sand walls from Biomes! Core.
+			if ((Resource.thingCategories != null) && Resource.thingCategories.Contains(ThingCategoryDefOf.StoneChunks))
 				return false;
 
 			if ((thingDef.defName.ToLower().StartsWith("smooth") == true) || (thingDef.defName.ToLower().StartsWith("raised") == true) || (thingDef.defName == "CollapsedRocks"))
@@ -147,9 +327,9 @@ namespace OreOverlay
 			return true;
 		}
 
-		private static bool IsOre(ThingDef def) => (def.index < m_IsOreDef.Length) && m_IsOreDef[def.index];
+		private static bool IsOre(ThingDef def) => (def.index < m_OreDefAt.Length) && (m_OreDefAt[def.index] == def);
 
-		private static bool IsSpecial(ThingDef def) => (def.index < m_IsSpecialDef.Length) && m_IsSpecialDef[def.index];
+		private static bool IsSpecial(ThingDef def) => (def.index < m_SpecialDefAt.Length) && (m_SpecialDefAt[def.index] == def);
 
 		// Forces a refresh on the next draw, e.g. after the mod settings changed.
 		public void MarkStale()
