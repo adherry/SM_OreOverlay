@@ -36,6 +36,13 @@ namespace OreOverlay
 			{ "VPE_EltexOre",      CreateColor(181,230,224) },
 		};
 
+		// Colours by mined resource, for resources no ore in the table above drops. Every ore that drops one of these gets its colour.
+		private static readonly Dictionary<string, Color> m_ResourceColorOverrides = new Dictionary<string, Color>()
+		{
+			{ "ComponentSpacer",      CreateColor(230,214,90) },
+			{ "GravlitePanel",      CreateColor(150,120,230) },
+		};
+
 		// Geysers and ponds. These win over ores on the same cell and can be hidden with the "show steam" option.
 		private static readonly Dictionary<string, Color> m_SpecialThings = new Dictionary<string, Color>()
 		{
@@ -120,6 +127,13 @@ namespace OreOverlay
 			// Ores in the override table give their colour to every other ore that drops the same resource,
 			// e.g. VGE compressed steel and twisted steel get the vanilla steel colour.
 			Dictionary<ThingDef, Color> ResourceColors = new Dictionary<ThingDef, Color>();
+			foreach (KeyValuePair<string, Color> Entry in m_ResourceColorOverrides)
+			{
+				ThingDef Resource = DefDatabase<ThingDef>.GetNamedSilentFail(Entry.Key);
+				if (Resource != null)
+					ResourceColors[Resource] = Entry.Value;
+			}
+
 			foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefsListForReading)
 			{
 				ThingDef Resource = thingDef.building?.mineableThing;
@@ -251,7 +265,16 @@ namespace OreOverlay
 			if ((thingDef.building.isNaturalRock == true) && (thingDef.building.isResourceRock == false))
 				return false;
 
-			if (thingDef.IsSmoothed)
+			if (thingDef.IsSmoothed || thingDef.IsBlueprint || thingDef.IsFrame)
+				return false;
+
+			// Ores drop something when mined. This skips boulders, VGE's sealant goop and VEE's deep snow.
+			ThingDef Resource = thingDef.building.mineableThing;
+			if (Resource == null)
+				return false;
+
+			// Walls that drop rock chunks are terrain, not ore, e.g. the ice and sand walls from Biomes! Core.
+			if ((Resource.thingCategories != null) && Resource.thingCategories.Contains(ThingCategoryDefOf.StoneChunks))
 				return false;
 
 			if ((thingDef.defName.ToLower().StartsWith("smooth") == true) || (thingDef.defName.ToLower().StartsWith("raised") == true) || (thingDef.defName == "CollapsedRocks"))
