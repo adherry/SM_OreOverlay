@@ -3,7 +3,7 @@
   <name>Ore Overlay</name>
   <author>SpaceMoth</author>
   <url></url>
-  <packageId>Spacemoth.OreOverlay</packageId>
+  <packageId>adherry.Spacemoth.OreOverlay</packageId>
   <description>This mod adds a new overlay into your rimworld experience. The Ore Overlay will highlight unmined ores on the map to aid in spotting resources for gathering.
   With a powered Ground-Penetrating scanner, this overlay will also show you ores inside of rock faces. 
 </description>
