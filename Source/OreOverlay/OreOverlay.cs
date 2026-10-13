@@ -259,11 +259,15 @@ namespace OreOverlay
 
 			const int Size = 16;
 			RenderTexture Previous = RenderTexture.active;
-			RenderTexture Target = RenderTexture.GetTemporary(Size, Size, 0, RenderTextureFormat.ARGB32);
-			Texture2D Readback = new Texture2D(Size, Size, TextureFormat.ARGB32, false);
+			RenderTexture Target = null;
+			Texture2D Readback = null;
 
+			// Everything that touches the renderer stays inside the try. On 1.7 these calls go through the engine's Unity shim,
+			// and a failure here must only cost the discovered colour, not the whole def lookup.
 			try
 			{
+				Target = RenderTexture.GetTemporary(Size, Size, 0, RenderTextureFormat.ARGB32);
+				Readback = new Texture2D(Size, Size, TextureFormat.ARGB32, false);
 				Graphics.Blit(Icon, Target);
 				RenderTexture.active = Target;
 				Readback.ReadPixels(new Rect(0, 0, Size, Size), 0, 0);
@@ -292,9 +296,17 @@ namespace OreOverlay
 			}
 			finally
 			{
-				RenderTexture.active = Previous;
-				RenderTexture.ReleaseTemporary(Target);
-				UnityEngine.Object.Destroy(Readback);
+				try
+				{
+					RenderTexture.active = Previous;
+					if (Target != null)
+						RenderTexture.ReleaseTemporary(Target);
+					if (Readback != null)
+						UnityEngine.Object.Destroy(Readback);
+				}
+				catch (Exception)
+				{
+				}
 			}
 		}
 
