@@ -66,7 +66,8 @@ namespace OreOverlay
 		private const int ScannerCheckIntervalTicks = 60;
 
 		// Lookup tables indexed by ThingDef.index, built once from the def database.
-		// The def itself is stored and compared, because a mod that removes defs can leave two defs with the same index.
+		// The tables hold the def itself instead of a flag, and lookups compare it with the def being checked:
+		// a mod that removes defs without reindexing can leave two defs with the same index.
 		private static ThingDef[] m_OreDefAt = null;
 		private static ThingDef[] m_SpecialDefAt = null;
 		private static Color[] m_DefColor = null;
