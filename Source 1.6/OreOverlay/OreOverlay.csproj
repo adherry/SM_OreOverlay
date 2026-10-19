@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- RimWorld 1.6 runs on .NET Framework 4.7.2. Shares the code in Source/OreOverlay, only the target and references differ.
+       Build with: dotnet build -c Release "Source 1.6/OreOverlay/OreOverlay.csproj" -->
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>OreOverlay</RootNamespace>
+    <AssemblyName>OreOverlay</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <OutputPath>..\..\1.6\Assemblies\</OutputPath>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Source\OreOverlay\Harmony.cs" />
+    <Compile Include="..\..\Source\OreOverlay\OreOverlay.cs" />
+    <Compile Include="..\..\Source\OreOverlay\OreOverlayModOptionHandler.cs" />
+    <Compile Include="..\..\Source\OreOverlay\OreOverlayModOptions.cs" />
+    <Compile Include="..\..\Source\OreOverlay\Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Krafs.Rimworld.Ref" Version="1.6.4871" ExcludeAssets="runtime" />
+    <!-- The 1.6 Harmony mod ships 0Harmony 2.3.x. -->
+    <PackageReference Include="Lib.Harmony.Ref" Version="2.3.6" ExcludeAssets="runtime" />
+  </ItemGroup>
+</Project>
