@@ -20,7 +20,7 @@ The deep drill overlay works with Colored Deep Resources
 
 Resolved issues from the Original OreOverlay:
 
-- Most of the Ores now get a dynamic colour assigned on starup. No more "everything grey" rocks. If your modded Rocks still look wierd tell me and I take a look at it.
+- Most of the Ores now get a dynamic colour assigned on startup. No more "everything grey" rocks. If your modded Rocks still look weird tell me and I take a look at it.
 - Performance issues on asteroids.
 - Mod only checks once per map scan if a powered Deep Scanner is present.
 - Replace ore colour array with a Dictionary to speed up lookups.
@@ -42,4 +42,4 @@ talk with him and we will figure out the situation.
 
 This mod is available on GitHub[github.com] with the GNU GPL v3 License[choosealicense.com] so please feel free to take a look to help develop your own mods!
 
-If you have any bugs/issues and feel I am not adressing them properly, please contact me via discord or in the comments.
+If you have any bugs/issues and feel I am not addressing them properly, please contact me via discord or in the comments.
