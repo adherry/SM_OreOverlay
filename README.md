@@ -1,0 +1,45 @@
+Description
+
+This mod adds a new overlay into your Rimworld experience. The Ore Overlay will highlight unmined ores on the map to aid in spotting resources for gathering.
+
+Steam Geysers will also be shown to aid planning your base expansions at a glance.
+
+With a powered Ground-Penetrating scanner, the overlay will also show you ores inside of rock faces and mountains to help you gather all the available ores in your tile.
+
+Using the ground overlay you can also see the underground deposits without needing to select a drill or the scanner.
+
+Known Issues
+
+- Obsidian is a bit dark still, but have not found a more fitting colour
+
+Note: When digging ores there might be a second or two delay before the overlay updates to remove these ores. (The Scan runs on a 300 Tick interval)
+
+Compatibility
+The mod has been tested in a heavily modified save and I have not found any conflicts.
+The deep drill overlay works with Colored Deep Resources
+
+Resolved issues from the Original OreOverlay:
+
+- Most of the Ores now get a dynamic colour assigned on starup. No more "everything grey" rocks. If your modded Rocks still look wierd tell me and I take a look at it.
+- Performance issues on asteroids.
+- Mod only checks once per map scan if a powered Deep Scanner is present.
+- Replace ore colour array with a Dictionary to speed up lookups.
+- Each map now has its own refresh state
+- Only the current map is refreshed (when you switch map it will auto trigger a scan of the map you switch to)
+- No more ore overlay highlights showing on map
+- No more errors when flying a Gravship (it waits until it has a valid map again)
+
+Non performance changes:
+- Ore overlay will inspect resources dropped by an ore when building the colour dictionary and will try to assign the same colour as the base ore. For example Compacted Steel, Compressed Steel (VGE) and Twisted Metal (VGE2) will all show in the same colour.
+- Finally declare harmony a dependency
+- 1.7 support (basic testing so far).
+- Remove 1.4 support as it used a separate source and I did not want to do a separate backport/merge, and Ore Overlay will stay with 1.4 support.
+
+About
+This mod has been originally created by SpaceMoth. I continued building on it as I was annoyed by the slow performance it had, especially since 1.6 and since SpaceMoth is currently winning Rimworld by having a life, I did some improvements myself.
+With 1.7 on the horizon, and OreOverlay broken there I decided to release this in the workshop, as I do not know if SpaceMoth will return to us for his mods, or if he wants to continue winning Rimworld. If he comes back then I will 
+talk with him and we will figure out the situation. 
+
+This mod is available on GitHub[github.com] with the GNU GPL v3 License[choosealicense.com] so please feel free to take a look to help develop your own mods!
+
+If you have any bugs/issues and feel I am not adressing them properly, please contact me via discord or in the comments.
