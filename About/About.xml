@@ -25,4 +25,7 @@
   <loadAfter>
     <li>brrainz.harmony</li>
   </loadAfter>
+  <incompatibleWith>
+    <li>Spacemoth.OreOverlay</li>
+  </incompatibleWith>
 </ModMetaData>
