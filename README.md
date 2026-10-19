@@ -20,7 +20,6 @@ The deep drill overlay works with Colored Deep Resources
 
 Resolved issues from the Original OreOverlay:
 
-- Most of the Ores now get a dynamic colour assigned on startup. No more "everything grey" rocks. If your modded Rocks still look weird tell me and I take a look at it.
 - Performance issues on asteroids.
 - Mod only checks once per map scan if a powered Deep Scanner is present.
 - Replace ore colour array with a Dictionary to speed up lookups.
@@ -30,7 +29,8 @@ Resolved issues from the Original OreOverlay:
 - No more errors when flying a Gravship (it waits until it has a valid map again)
 
 Non performance changes:
-- Ore overlay will inspect resources dropped by an ore when building the colour dictionary and will try to assign the same colour as the base ore. For example Compacted Steel, Compressed Steel (VGE) and Twisted Metal (VGE2) will all show in the same colour.
+- Most of the Ores now get a dynamic colour assigned on startup. No more "everything grey" rocks. If your modded Rocks still look weird tell me and I take a look at it.
+- Ore overlay will inspect resources dropped by an ore when building the colour dictionary and will assign the same colour as the base ore. For example Compacted Steel, Compressed Steel (VGE) and Twisted Metal (VGE2) will all show in the same colour.
 - Finally declare harmony a dependency
 - 1.7 support (basic testing so far).
 - Remove 1.4 support as it used a separate source and I did not want to do a separate backport/merge, and Ore Overlay will stay with 1.4 support.
