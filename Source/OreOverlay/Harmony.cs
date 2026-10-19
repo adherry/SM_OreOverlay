@@ -26,7 +26,7 @@ namespace OreOverlay
                 Log.Warning("Exception loading icons for Ore Overlay");
             }
             
-            Harmony harmony = new Harmony("Spacemoth.OreOverlay");
+            Harmony harmony = new Harmony("adherry.OreOverlayImproved");
             harmony.PatchAll();
 
             // Build the ore lookup here, on the main thread. Maps are loaded on a worker thread, where the icon colour readback would crash Unity.
